@@ -1,0 +1,15 @@
+Producto 1 (Teclado mecanico): stock=10, reservado=2, disponible=8
+
+== R11: verificaciones concurrentes ==
+1 pedido  -> 201 en 0.56 s (secuencial serían ~1.0 s: 0.5 cliente + 0.5 stock)
+Cliente y producto inexistentes -> 404 {'error': {'code': 'CLIENTE_NO_ENCONTRADO', 'message': 'El cliente 999 no existe'}}
+
+== R12: 20 pedidos simultáneos de 1 unidad (quedan 7) ==
+Confirmados (201): 7
+Rechazados  (409): 13
+Otros:             0
+Tiempo total:      0.87 s
+Stock final:       2 (reservado 2)
+Ejemplo de rechazo: {'error': {'code': 'STOCK_INSUFICIENTE', 'message': 'Stock insuficiente: piden 1, disponible 0'}}
+
+RESULTADO: OK - no hubo sobreventa ni restas pisadas

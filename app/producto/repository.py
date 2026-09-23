@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+from app.errores import AtributoInvalido
+
 from .schemas import ProductoCreate, ProductoRead, ProductoUpdate
 
 
@@ -45,8 +47,13 @@ class ProductoRepositorio:
             if p.id == id:
                 cambios = {campo: getattr(data, campo) for campo in data.model_fields_set}
                 actualizado = p.model_copy(update=cambios)
+                # model_copy no vuelve a correr el model_validator, así que
+                # la regla de dos campos (R7) se re-chequea acá a mano.
                 if actualizado.stock_reservado > actualizado.stock:
-                    return None
+                    raise AtributoInvalido(
+                        "stock_reservado no puede superar a stock "
+                        f"(quedaría {actualizado.stock_reservado} > {actualizado.stock})"
+                    )
                 self.db[i] = actualizado
                 return actualizado
         return None

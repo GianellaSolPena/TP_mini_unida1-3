@@ -1,0 +1,15 @@
+# Bytecode / cachés de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entorno virtual
+.venv/
+venv/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Consigna del TP (Word) - no se versiona
+*.docx

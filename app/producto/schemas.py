@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 class ProductoBase(BaseModel):
     nombre: Annotated[str, Field(min_length=3)]
     precio: Annotated[Decimal, Field(gt=0)]
-    stock: Annotated[int, Field(gt=0)]
+    stock: Annotated[int, Field(ge=0)]
     stock_reservado: Annotated[int, Field(ge=0)] = 0
     categoria: str | None = None
 
@@ -32,7 +32,7 @@ class ProductoRead(ProductoBase):
 class ProductoUpdate(BaseModel):
     nombre: Annotated[str | None, Field(default=None, min_length=3)]
     precio: Annotated[Decimal | None, Field(default=None, gt=0)]
-    stock: Annotated[int | None, Field(default=None, gt=0)]
+    stock: Annotated[int | None, Field(default=None, ge=0)]
     stock_reservado: Annotated[int | None, Field(default=None, ge=0)]
     categoria: str | None = None
 
