@@ -1,0 +1,8 @@
+# Bytecode / cachés de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Consigna del TP (Word) - no se versiona
+*.docx
+MiniTP_Cap1a3_Consigna.docx
