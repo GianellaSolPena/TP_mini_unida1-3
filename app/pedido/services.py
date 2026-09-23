@@ -1,40 +1,38 @@
 import asyncio
 import time
 
-from app.producto.repository import ProductoRepositorio
-from app.producto.routers import (
+from app.cliente.cliente import existe_cliente
+from app.errores import (
+    ClienteNoEncontrado,
     ErrorDominio,
     ProductoNoEncontrado,
     StockInsuficiente,
 )
+from app.producto.repository import ProductoRepositorio
 
 from .repository import PedidoRepositorio
-from .schemas import PedidoCreate, PedidoPaginado, PedidoRead, PedidoUpdate
+from .schemas import (
+    DemoResultado,
+    PedidoCreate,
+    PedidoPaginado,
+    PedidoRead,
+    PedidoUpdate,
+)
 
-repositorio = PedidoRepositorio()
-
-CLIENTES_REGISTRADOS: set[int] = {101, 102, 103}
-
-# R12: protege la resta de stock entre pedidos concurrentes.
+# R12: protege la sección "leer stock -> restar stock" entre pedidos
+# concurrentes. Es un solo lock para toda la app (un solo proceso).
 _stock_lock = asyncio.Lock()
 
 
-class ClienteNoEncontrado(ErrorDominio):
-    code = "CLIENTE_NO_ENCONTRADO"
-    status_code = 404
-
-
 async def _verificar_cliente(cliente_id: int) -> None:
-    """Simula una verificación I/O (p.ej. consulta a otro servicio)."""
-    await asyncio.sleep(0.5)
-    if cliente_id not in CLIENTES_REGISTRADOS:
+    if not await existe_cliente(cliente_id):
         raise ClienteNoEncontrado(f"El cliente {cliente_id} no existe")
 
 
 async def _verificar_stock(
     producto_repo: ProductoRepositorio, producto_id: int, cantidad: int
-):
-    """Simula una verificación I/O y devuelve el producto."""
+) -> None:
+    """Chequeo previo (optimista) del stock, con I/O simulada."""
     await asyncio.sleep(0.5)
     producto = producto_repo.buscar_por_id(producto_id)
     if producto is None:
@@ -44,12 +42,12 @@ async def _verificar_stock(
         raise StockInsuficiente(
             f"Stock insuficiente: piden {cantidad}, disponible {disponible}"
         )
-    return producto
 
 
 async def crear(
     repo: PedidoRepositorio, producto_repo: ProductoRepositorio, data: PedidoCreate
 ) -> PedidoRead:
+    # R11: cliente y stock se verifican en paralelo; ninguna depende de la otra.
     try:
         async with asyncio.TaskGroup() as tg:
             tg.create_task(_verificar_cliente(data.cliente_id))
@@ -57,14 +55,16 @@ async def crear(
                 _verificar_stock(producto_repo, data.producto_id, data.cantidad)
             )
     except BaseExceptionGroup as eg:
-        # TaskGroup envuelve en ExceptionGroup: desempaquetamos para
-        # conservar el formato propio de errores del dominio (R9).
+        # TaskGroup envuelve los errores en un ExceptionGroup: sacamos el
+        # error de dominio para responder con el formato propio (R9).
         for exc in eg.exceptions:
             if isinstance(exc, ErrorDominio):
-                raise exc
+                raise exc from None
         raise
 
-    
+    # R12: entre la verificación de arriba y este punto pudo entrar otro
+    # pedido del mismo producto. Por eso se vuelve a leer y se resta
+    # adentro del lock: nadie más puede leer/escribir el stock mientras tanto.
     async with _stock_lock:
         producto = producto_repo.buscar_por_id(data.producto_id)
         if producto is None:
@@ -74,7 +74,11 @@ async def crear(
             raise StockInsuficiente(
                 f"Stock insuficiente: piden {data.cantidad}, disponible {disponible}"
             )
-        producto.stock -= data.cantidad
+        # Simula la escritura en un almacenamiento externo. Este await es el
+        # punto donde, SIN el lock, otro pedido podría leer el stock viejo y
+        # los dos restarían sobre el mismo valor (condición de carrera).
+        await asyncio.sleep(0.05)
+        producto.stock = producto.stock - data.cantidad
 
     return repo.crear(data)
 
@@ -105,19 +109,19 @@ async def _verificacion_unitaria(n: int) -> int:
     return n
 
 
-async def demo_secuencial() -> dict:
+async def demo_secuencial() -> DemoResultado:
     inicio = time.perf_counter()
     resultados = []
     for i in range(3):
         resultados.append(await _verificacion_unitaria(i))
-    fin = time.perf_counter()
-    return {"modo": "secuencial", "resultados": resultados, "segundos": round(fin - inicio, 3)}
+    segundos = time.perf_counter() - inicio
+    return DemoResultado(modo="secuencial", resultados=resultados, segundos=round(segundos, 3))
 
 
-async def demo_concurrente() -> dict:
+async def demo_concurrente() -> DemoResultado:
     inicio = time.perf_counter()
     async with asyncio.TaskGroup() as tg:
         tareas = [tg.create_task(_verificacion_unitaria(i)) for i in range(3)]
     resultados = [t.result() for t in tareas]
-    fin = time.perf_counter()
-    return {"modo": "concurrente", "resultados": resultados, "segundos": round(fin - inicio, 3)}
+    segundos = time.perf_counter() - inicio
+    return DemoResultado(modo="concurrente", resultados=resultados, segundos=round(segundos, 3))

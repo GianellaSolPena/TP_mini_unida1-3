@@ -1,46 +1,12 @@
-from fastapi import APIRouter, Depends, Path, Query, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Path, Query, status
+
+from app.dependencias import get_producto_repo
+from app.errores import AtributoInvalido, ProductoNoEncontrado
 
 from . import schemas, services
 from .repository import ProductoRepositorio
 
-
-class ErrorDominio(Exception):
-    code = "ERROR_DOMINIO"
-    status_code = 400
-
-    def __init__(self, message: str):
-        self.message = message
-        super().__init__(message)
-
-
-class ProductoNoEncontrado(ErrorDominio):
-    code = "PRODUCTO_NO_ENCONTRADO"
-    status_code = 404
-
-
-class StockInsuficiente(ErrorDominio):
-    code = "STOCK_INSUFICIENTE"
-    status_code = 409
-
-
-class AtributoInvalido(ErrorDominio):
-    code = "ATRIBUTO_INVALIDO"
-    status_code = 400
-
-
-async def manejar_error_dominio(request: Request, exc: ErrorDominio) -> JSONResponse:
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"error": {"code": exc.code, "message": exc.message}},
-    )
-
-
 router = APIRouter(prefix="/productos", tags=["Productos"])
-
-
-def get_producto_repo() -> ProductoRepositorio:
-    return services.repositorio
 
 
 @router.get("/", response_model=schemas.ProductoPaginado, status_code=status.HTTP_200_OK)
@@ -80,12 +46,12 @@ async def update_producto(
     actual = await services.obtener_por_id(repo, id)
     if actual is None:
         raise ProductoNoEncontrado(f"El producto {id} no existe")
+    # R10: solo miramos los campos que el cliente ENVIÓ (model_fields_set).
+    # "categoria" es el único campo que admite null explícito (lo borra);
+    # para el resto, un null enviado es un error.
     for campo in producto.model_fields_set:
         if getattr(producto, campo) is None and campo != "categoria":
             raise AtributoInvalido(f"El campo '{campo}' no admite null")
-    actualizado = await services.actualizar(repo, id, producto)
-    if actualizado is None:
-        raise StockInsuficiente(
-            "stock_reservado supera al stock total luego del cambio"
-        )
-    return actualizado
+    # Si el cambio deja stock_reservado > stock, el repositorio levanta
+    # AtributoInvalido (dato inválido, no falta de stock).
+    return await services.actualizar(repo, id, producto)

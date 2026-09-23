@@ -1,7 +1,11 @@
 """Clientes ya registrados del kiosco (consigna §2: ids fijos, sin alta)."""
 
-CLIENTES_REGISTRADOS: set[int] = {101, 102, 103}
+import asyncio
+
+CLIENTES_REGISTRADOS: frozenset[int] = frozenset({101, 102, 103})
 
 
-def existe_cliente(cliente_id: int) -> bool:
+async def existe_cliente(cliente_id: int) -> bool:
+    """Simula una consulta I/O (p. ej. a un servicio de clientes)."""
+    await asyncio.sleep(0.5)
     return cliente_id in CLIENTES_REGISTRADOS

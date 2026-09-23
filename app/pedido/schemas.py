@@ -34,3 +34,11 @@ class PedidoUpdate(BaseModel):
 class PedidoPaginado(BaseModel):
     total: int
     items: list[PedidoRead]
+
+
+class DemoResultado(BaseModel):
+    """Respuesta de /pedidos/demo/* (R14): así /docs muestra el esquema real."""
+
+    modo: str
+    resultados: list[int]
+    segundos: float

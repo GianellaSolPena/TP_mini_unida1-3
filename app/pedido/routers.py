@@ -1,33 +1,18 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Path, Query, status
 
+from app.dependencias import get_pedido_repo, get_producto_repo
+from app.errores import AtributoInvalido, PedidoNoEncontrado
 from app.producto.repository import ProductoRepositorio
-from app.producto.routers import ErrorDominio, get_producto_repo
 
 from . import schemas, services
 from .repository import PedidoRepositorio
-from .services import ClienteNoEncontrado  # noqa: F401 (re-export para main/tests)
-
-
-class PedidoNoEncontrado(ErrorDominio):
-    code = "PEDIDO_NO_ENCONTRADO"
-    status_code = 404
-
-
-class AtributoInvalido(ErrorDominio):
-    code = "ATRIBUTO_INVALIDO"
-    status_code = 400
-
 
 router = APIRouter(prefix="/pedidos", tags=["Pedidos"])
 
 
-def get_pedido_repo() -> PedidoRepositorio:
-    return services.repositorio
-
-
 def _notificar_pedido_confirmado(pedido_id: int, cliente_id: int) -> None:
-    # R13: tarea en segundo plano (la ejecuta FastAPI vía BackgroundTasks).
-    # Acá iría el envío real (mail, webhook, etc.); dejamos un log.
+    # R13: tarea en segundo plano (la ejecuta FastAPI vía BackgroundTasks,
+    # después de enviar la respuesta). Acá iría el envío real (mail, webhook).
     print(f"[notificacion] pedido {pedido_id} confirmado para cliente {cliente_id}")
 
 
@@ -42,14 +27,18 @@ async def get_pedidos(
 
 # R14: van antes de "/{id}" para que no los capture el path param.
 @router.get(
-    "/demo/secuencial", response_model=dict, status_code=status.HTTP_200_OK
+    "/demo/secuencial",
+    response_model=schemas.DemoResultado,
+    status_code=status.HTTP_200_OK,
 )
 async def demo_secuencial():
     return await services.demo_secuencial()
 
 
 @router.get(
-    "/demo/concurrente", response_model=dict, status_code=status.HTTP_200_OK
+    "/demo/concurrente",
+    response_model=schemas.DemoResultado,
+    status_code=status.HTTP_200_OK,
 )
 async def demo_concurrente():
     return await services.demo_concurrente()
@@ -90,8 +79,7 @@ async def update_pedido(
     actual = await services.obtener_por_id(repo, id)
     if actual is None:
         raise PedidoNoEncontrado(f"El pedido {id} no existe")
-    # En pedido ningún campo admite null explícito (no hay opcional anulable
-    # como "categoria" en producto): null siempre es error.
+    # En pedido ningún campo admite null explícito: null siempre es error.
     for campo in pedido.model_fields_set:
         if getattr(pedido, campo) is None:
             raise AtributoInvalido(f"El campo '{campo}' no admite null")

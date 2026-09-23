@@ -3,6 +3,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Entorno virtual
+.venv/
+venv/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
 # Consigna del TP (Word) - no se versiona
 *.docx
-MiniTP_Cap1a3_Consigna.docx
